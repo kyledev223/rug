@@ -126,3 +126,6 @@ export const LINKS = {
   solscanTx: (s: string) => `https://solscan.io/tx/${s}`,
   dexscreener: (a: string) => `https://dexscreener.com/solana/${a}`,
 };
+
+/** Tier 3 API limits per key. */
+export const API_LIMITS = { perMinute: 30, perDay: 2000 };

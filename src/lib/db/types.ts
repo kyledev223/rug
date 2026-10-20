@@ -22,8 +22,8 @@ export interface WatchSnapshot {
   liquidityUsd: number | null;
   mintAuthority: boolean | null;
   freezeAuthority: boolean | null;
-  topHolderPct: number | null;
-  topHolder: string | null;
+  /** Largest counted holders (pools/burn excluded); null when holder data was unavailable. */
+  topHolders: Array<{ owner: string; pct: number }> | null;
   generatedAt: string;
 }
 
