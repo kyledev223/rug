@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { APP_NAME, APP_TAGLINE, DISCLAIMER } from "@/lib/config";
+import { Nav } from "@/components/Nav";
+import { Ticker } from "@/components/Ticker";
+import { Footer } from "@/components/Footer";
 
 const mono = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin"], display: "swap" });
 const grotesk = Space_Grotesk({ variable: "--font-grotesk", subsets: ["latin"], weight: ["500", "700"], display: "swap" });
@@ -31,9 +34,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-paper focus:p-2">
           Skip to content
         </a>
+        <Nav />
+        <Ticker />
         <main id="main" className="flex-1">
           {children}
         </main>
+        <Footer />
       </body>
     </html>
   );

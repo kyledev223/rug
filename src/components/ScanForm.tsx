@@ -46,7 +46,6 @@ export function ScanForm({ autoFocus = false, size = "lg" }: { autoFocus?: boole
             autoCapitalize="off"
             spellCheck={false}
             inputMode="text"
-            placeholder="paste token mint address"
             aria-invalid={Boolean(error)}
             aria-describedby={error ? `mint-err-${size}` : undefined}
             className={cx(
@@ -54,9 +53,16 @@ export function ScanForm({ autoFocus = false, size = "lg" }: { autoFocus?: boole
               size === "lg" ? "py-2 text-sm sm:text-base" : "py-1 text-sm",
             )}
           />
-          {!value && !focused && (
-            <span aria-hidden className="pointer-events-none absolute left-9 animate-blink text-red motion-reduce:animate-none">
-              █
+          {!value && (
+            <span
+              aria-hidden
+              className={cx(
+                "pointer-events-none absolute left-9 font-mono whitespace-nowrap text-faint",
+                size === "lg" ? "text-sm sm:text-base" : "text-sm",
+              )}
+            >
+              paste token mint address
+              {!focused && <span className="ml-0.5 animate-blink text-red motion-reduce:animate-none">█</span>}
             </span>
           )}
         </div>

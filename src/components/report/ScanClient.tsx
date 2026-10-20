@@ -97,11 +97,15 @@ export function ScanClient({ mint, actions }: { mint: string; actions?: (r: Scan
     }
   }, [mint]);
 
+  // Scan once per mint. The ref survives StrictMode's double effect run and
+  // Activity re-shows, so neither burns an extra daily-quota unit.
+  const ranFor = useRef<string | null>(null);
   useEffect(() => {
-    // Kick off the scan once per mint; the state updates happen after the fetch resolves.
+    if (ranFor.current === mint) return;
+    ranFor.current = mint;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void run();
-  }, [run]);
+  }, [run, mint]);
 
   // Real elapsed timer while waiting on the server.
   useEffect(() => {
