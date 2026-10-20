@@ -103,7 +103,6 @@ export function ScanClient({ mint, actions }: { mint: string; actions?: (r: Scan
   useEffect(() => {
     if (ranFor.current === mint) return;
     ranFor.current = mint;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void run();
   }, [run, mint]);
 

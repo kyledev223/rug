@@ -1,6 +1,6 @@
 import { isValidPublicKey } from "@/lib/solana/address";
 import { jsonError, readJson, sameOrigin } from "@/lib/http";
-import { getViewer, quotaSubject } from "@/lib/auth/viewer";
+import { getViewer, quotaSubject, withViewer } from "@/lib/auth/viewer";
 import { consumeDaily, limitHeaders, rateLimit } from "@/lib/ratelimit";
 import { getCached, recordScan, runFreshScan } from "@/lib/scan/run";
 import { ScanInputError } from "@/lib/scan/collect";
@@ -33,11 +33,14 @@ export async function POST(req: Request) {
   const cached = await getCached(mint);
   if (cached) {
     void recordScan(cached.report, who, via);
-    return Response.json({
-      report: cached.report,
-      explanation: cached.explanation ?? templateExplanation(cached.report),
-      cached: true,
-    });
+    return withViewer(
+      viewer,
+      Response.json({
+        report: cached.report,
+        explanation: cached.explanation ?? templateExplanation(cached.report),
+        cached: true,
+      }),
+    );
   }
 
   // Only fresh scans (which cost API quota) count toward the daily limit.
@@ -57,9 +60,12 @@ export async function POST(req: Request) {
   try {
     const report = await runFreshScan(mint);
     void recordScan(report, who, via);
-    return Response.json(
-      { report, explanation: templateExplanation(report), cached: false },
-      { headers: viewer.tier.dailyScans === null ? {} : limitHeaders(quota) },
+    return withViewer(
+      viewer,
+      Response.json(
+        { report, explanation: templateExplanation(report), cached: false },
+        { headers: viewer.tier.dailyScans === null ? {} : limitHeaders(quota) },
+      ),
     );
   } catch (e) {
     if (e instanceof ScanInputError) return jsonError(e.status, "not_a_mint", e.message);
