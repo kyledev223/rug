@@ -1,8 +1,7 @@
--- RUG CHECK schema. Run in the Supabase SQL editor (or `supabase db push`).
--- All access goes through the server with the service-role key; RLS is enabled
--- with no policies so the anon key can read/write nothing.
+-- RUG CHECK schema for Neon (or any Postgres 14+).
+-- Apply with `npm run db:migrate` or paste into the Neon SQL Editor. Safe to re-run.
+-- Only the server connects (DATABASE_URL); never expose the connection string to the browser.
 
-create extension if not exists pgcrypto;
 
 -- ---------- scan cache (5 min per mint) ----------
 create table if not exists public.scan_cache (
@@ -165,22 +164,3 @@ as $$
   delete from public.scan_cache where expires_at < now() - interval '1 hour';
 $$;
 
--- ---------- lock everything down ----------
-alter table public.scan_cache      enable row level security;
-alter table public.scans           enable row level security;
-alter table public.usage_counters  enable row level security;
-alter table public.auth_nonces     enable row level security;
-alter table public.wallets         enable row level security;
-alter table public.watchlists      enable row level security;
-alter table public.watchlist_items enable row level security;
-alter table public.alerts          enable row level security;
-alter table public.api_keys        enable row level security;
-
-revoke execute on function public.incr_counter(text, timestamptz, timestamptz) from public, anon, authenticated;
-revoke execute on function public.recent_scans(integer) from public, anon, authenticated;
-revoke execute on function public.scan_stats() from public, anon, authenticated;
-revoke execute on function public.prune_expired() from public, anon, authenticated;
-grant execute on function public.incr_counter(text, timestamptz, timestamptz) to service_role;
-grant execute on function public.recent_scans(integer) to service_role;
-grant execute on function public.scan_stats() to service_role;
-grant execute on function public.prune_expired() to service_role;

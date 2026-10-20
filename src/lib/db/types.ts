@@ -88,7 +88,7 @@ export interface WalletRow {
 }
 
 export interface Repo {
-  readonly kind: "supabase" | "memory";
+  readonly kind: "neon" | "memory";
 
   getCachedScan(mint: string): Promise<{ report: ScanReport; explanation: Explanation | null } | null>;
   putCachedScan(mint: string, report: ScanReport, expiresAt: Date): Promise<void>;

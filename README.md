@@ -11,7 +11,7 @@ token (`$RUGCHECK`, placeholder) unlock more usage.
 - **Unknown is never a pass.** A failed data source adds risk and lowers the report's "coverage" figure.
 - **No fake numbers.** Every stat on the site comes from real scans.
 
-Stack: Next.js 16 (App Router, Cache Components) · TypeScript · Tailwind CSS 4 · Supabase (Postgres) ·
+Stack: Next.js 16 (App Router, Cache Components) · TypeScript · Tailwind CSS 4 · Neon (serverless Postgres) ·
 Solana wallet adapter · Google Gemini (`@google/genai`) · Helius RPC + DAS · DexScreener · Raydium API · Vitest.
 
 ---
@@ -20,7 +20,7 @@ Solana wallet adapter · Google Gemini (`@google/genai`) · Helius RPC + DAS · 
 
 1. [Quick start](#quick-start)
 2. [Environment variables](#environment-variables)
-3. [Service setup](#service-setup): Helius, Gemini, Supabase
+3. [Service setup](#service-setup): Helius, Gemini, Neon
 4. [Deploy to Vercel](#deploy-to-vercel)
 5. [Configuration](#configuration): rename, token mint, tiers
 6. [How it works](#how-it-works)
@@ -47,8 +47,8 @@ The app runs with **no keys at all**, but some things are degraded:
 - Without `HELIUS_API_KEY` it uses the public Solana RPC, which rate-limits `getTokenLargestAccounts`. Holder and wallet
   checks then show **unknown**, and DAS metadata falls back to reading the Metaplex account directly.
 - Without `GEMINI_API_KEY` reports use template explanations.
-- Without Supabase it uses **in-memory storage**: fine for local development, but it isn't shared across serverless
-  instances and resets on restart. **Configure Supabase for any real deployment.**
+- Without `DATABASE_URL` it uses **in-memory storage**: fine for local development, but it isn't shared across
+  serverless instances and resets on restart. **Configure Neon for any real deployment.**
 
 ## Environment variables
 
@@ -60,8 +60,7 @@ All keys are read server-side only. See [`.env.example`](.env.example).
 | `SOLANA_RPC_URL` | no | Custom RPC, used only when `HELIUS_API_KEY` is empty. |
 | `GEMINI_API_KEY` | no | AI explanations. |
 | `GEMINI_MODEL` | no | Defaults to `gemini-3.8-flash` (newest free-tier Flash as of Oct 2026). |
-| `SUPABASE_URL` | prod | Supabase project URL. |
-| `SUPABASE_SERVICE_ROLE_KEY` | prod | Service-role key (server only). |
+| `DATABASE_URL` | prod | Neon Postgres connection string (server only). |
 | `SESSION_SECRET` | prod | 32+ random chars; signs session cookies. The app refuses to start in production without it. |
 | `IP_HASH_SALT` | no | Salt for hashing IPs (IPs are never stored raw). Defaults to `SESSION_SECRET`. |
 | `CRON_SECRET` | for alerts | Protects `/api/cron/alerts`. |
@@ -95,23 +94,30 @@ dev balances). Results are cached for 5 minutes per mint, and RPC concurrency is
    contradicting the score, and a server-side guard rejects output that breaks those rules. Calls are capped at 9/minute
    globally to stay inside the free quota. Anything over the cap gets the template explanation.
 
-### Supabase
+### Neon (Postgres)
 
-1. Create a free project at <https://supabase.com>.
-2. Open **SQL Editor**, paste [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and run it.
-   With the Supabase CLI you can run `supabase db push` instead.
-3. **Project Settings → API**: copy the Project URL into `SUPABASE_URL` and the `service_role` key into
-   `SUPABASE_SERVICE_ROLE_KEY`.
+1. Create a free project at <https://neon.tech>, or add Neon from the Vercel Marketplace (**Storage → Neon**), which
+   sets `DATABASE_URL` on your Vercel project automatically.
+2. Copy the **pooled** connection string (its host contains `-pooler`) into `DATABASE_URL` in `.env.local`.
+3. Create the schema:
 
-Every table has Row Level Security enabled with **no policies**, and the SQL functions are revoked from `anon` and
-`authenticated`. Only the server, using the service-role key, can read or write.
+   ```bash
+   npm run db:migrate
+   ```
+
+   This applies [`db/migrations/0001_init.sql`](db/migrations/0001_init.sql). The migration is idempotent, so re-running
+   it is safe. You can also paste the file into the Neon SQL Editor.
+
+The app talks to Neon with `@neondatabase/serverless` over HTTP (one round trip per query, no connection pool to manage
+in serverless functions). There is no browser-facing database API: only the server holds `DATABASE_URL`.
 
 ## Deploy to Vercel
 
 1. Push this repo to GitHub (done) and click **Add New → Project** in Vercel. Import the repo; the framework preset is
    detected automatically.
 2. Add the environment variables from the table above (Production and Preview). At minimum: `SESSION_SECRET`,
-   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `HELIUS_API_KEY`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET`.
+   `DATABASE_URL`, `HELIUS_API_KEY`, `NEXT_PUBLIC_SITE_URL`, `CRON_SECRET`. Run `npm run db:migrate` once against the
+   production database (locally, with that `DATABASE_URL`).
 3. Deploy. Scan routes declare `maxDuration = 60`.
 4. **Alerts.** [`vercel.json`](vercel.json) registers a daily cron (Hobby plans allow one run per day) that calls
    `/api/cron/alerts` with `Authorization: Bearer $CRON_SECRET`. For checks every 30 minutes on the free tier, add the
@@ -156,11 +162,12 @@ src/
     score.ts          weighted score, floors, labels, coverage
     engine.ts         pure: snapshot -> ScanReport
     explain.ts        template explanations
-    run.ts            5-min cache (memory + Supabase), in-flight de-dup
+    run.ts            5-min cache (memory + Postgres), in-flight de-dup
   lib/ai/gemini.ts    explanation layer + policy guard
   lib/auth/           sign-in message, signature verify, session cookie, tiers, API keys
   lib/alerts/         snapshot diff + sweep runner
-  lib/db/             Repo interface: Supabase implementation + in-memory dev fallback
+  lib/db/             Repo interface: Neon implementation + in-memory dev fallback
+db/migrations/        SQL schema (npm run db:migrate)
 ```
 
 **Checks:** mint authority · freeze authority · Token-2022 extensions · liquidity depth · LP burned/locked · holder
@@ -192,6 +199,9 @@ npm run build
   and a non-zero score).
 - `tests/auth.test.ts` runs the real nonce → sign → verify route handlers with a generated keypair, plus replay, forged
   signature and cross-origin cases.
+- `tests/repo-contract.ts` defines the behaviour every storage backend must satisfy (ownership checks, single-use
+  nonces, counters, alert queue…). `tests/repo.test.ts` runs it against the in-memory repo. The Neon repo was verified
+  with the same suite against real Postgres (PGlite behind Neon's HTTP protocol).
 - `tests/stage4.test.ts` covers alert diffing, CSV formula-injection escaping, the webhook allowlist, gated watchlist and
   API-key routes, and the cron secret.
 
@@ -200,7 +210,7 @@ To try gated features locally before the token exists, set `DEV_FORCE_TIER=3` in
 ## Security notes
 
 - No seed phrase or private key is ever requested. Verification is a message signature only.
-- API keys, the Supabase service-role key and the Helius key stay server-side. Holder API keys are stored as SHA-256
+- API keys, `DATABASE_URL` and the Helius key stay server-side. Holder API keys are stored as SHA-256
   hashes and shown once.
 - All API routes are rate limited per IP and/or per wallet/key. Mutating cookie routes reject cross-origin requests.
 - Inputs are validated: base58 32-byte keys, mint-account ownership checks, body size caps.
@@ -214,7 +224,7 @@ To try gated features locally before the token exists, set `DEV_FORCE_TIER=3` in
 - **Holder checks always "unknown":** you're on the public RPC (HTTP 429). Set `HELIUS_API_KEY`.
 - **Dev server reloading in a loop or serving stale modules after `npm install`/`uninstall`:** stop it, delete `.next/`
   and restart. Turbopack's persistent cache can go stale, especially inside synced folders such as OneDrive.
-- **"Free limit reached" while developing:** quotas are in memory without Supabase. Restart the dev server, or verify a
+- **"Free limit reached" while developing:** quotas are in memory without `DATABASE_URL`. Restart the dev server, or verify a
   wallet with `DEV_FORCE_TIER`.
 - **No AI explanations:** check `GEMINI_API_KEY` and `GEMINI_MODEL`. Template explanations are expected when Gemini is
   rate-limited or its output fails the policy guard; server logs say which.

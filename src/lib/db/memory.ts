@@ -1,5 +1,5 @@
 /**
- * In-memory Repo for local development without Supabase.
+ * In-memory Repo for local development without a database.
  * Not shared between serverless instances — never rely on it in production.
  */
 import { randomUUID } from "node:crypto";
@@ -196,7 +196,7 @@ export function createMemoryRepo(): Repo {
     },
     async revokeApiKey(wallet, id) {
       const k = keys.get(id);
-      if (!k || k.wallet !== wallet) return false;
+      if (!k || k.wallet !== wallet || k.revoked_at) return false;
       k.revoked_at = iso();
       return true;
     },

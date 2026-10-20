@@ -6,8 +6,7 @@ export interface ServerEnv {
   SOLANA_RPC_URL?: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL: string;
-  SUPABASE_URL?: string;
-  SUPABASE_SERVICE_ROLE_KEY?: string;
+  DATABASE_URL?: string;
   SESSION_SECRET: string;
   CRON_SECRET?: string;
   IP_HASH_SALT: string;
@@ -36,8 +35,7 @@ export function serverEnv(): ServerEnv {
     SOLANA_RPC_URL: e.SOLANA_RPC_URL || undefined,
     GEMINI_API_KEY: e.GEMINI_API_KEY || undefined,
     GEMINI_MODEL: e.GEMINI_MODEL || "gemini-3.8-flash",
-    SUPABASE_URL: e.SUPABASE_URL || undefined,
-    SUPABASE_SERVICE_ROLE_KEY: e.SUPABASE_SERVICE_ROLE_KEY || undefined,
+    DATABASE_URL: e.DATABASE_URL || undefined,
     SESSION_SECRET: sessionSecret || "dev-insecure-session-secret-change-me-0000",
     CRON_SECRET: e.CRON_SECRET || undefined,
     IP_HASH_SALT: e.IP_HASH_SALT || sessionSecret || "dev-salt",
